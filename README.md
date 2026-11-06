@@ -20,3 +20,10 @@ other platforms by request.
 
 # web site
 https://aosfather.github.io/mygod/
+
+## License
+
+Only the PRD (Product Requirements Document) is open-sourced. This project is
+a product of AI coding — the PRD itself is the canonical source of truth, and
+the implementation is derived from it.
+
