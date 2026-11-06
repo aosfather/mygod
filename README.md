@@ -17,3 +17,6 @@ release info, resolves the match, builds the queue, and starts playback.
 
 Self-hosted · no account · no data upload · macOS Apple Silicon (arm64) now,
 other platforms by request.
+
+# web site
+https://aosfather.github.io/mygod/
