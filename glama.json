@@ -1,0 +1,506 @@
+{
+  "$schema": "https://glama.ai/mcp/schema.json",
+  "details": {
+    "description": "A local-first Model Context Protocol (MCP) server that exposes a multi-source music engine to AI agents: free cloud music sources and local files. Agents can search catalogs, build and play queues, control playback (play/pause/seek/volume), shape sound with a 10-band EQ, night mode and loudness normalization, read timed lyrics and comments, browse discovery feeds and the personal FM, and scan local music. The engine runs as a single instance on the machine: a Streamable HTTP `serve` mode holds the engine lock so every connected client shares one player, while the default stdio mode is spawned per client by the MCP host.",
+    "repositoryUrl": "https://github.com/aosfather/mygod",
+    "homepageUrl": "https://aosfather.github.io/mygod",
+    "tags": [
+      "music",
+      "cloud-music",
+      "audio",
+      "media-player",
+      "playback",
+      "lyrics",
+      "equalizer",
+      "local-first",
+      "mcp",
+      "agent"
+    ],
+    "license": "AGPL-3.0",
+    "version": "0.3.0"
+  },
+  "tools": [
+    {
+      "description": "Report the engine: its version, each source's sign-in state and guest note, the NetEase listener's profile, and the local preference profile. Call this first. NetEase's personal feeds and the radio need its session; kuwo, migu and qq play without one — signed out, login_qr starts a NetEase sign-in.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "account_status"
+    },
+    {
+      "description": "QR code sign-in. action=start returns the login URL — render it as a QR code for the user to scan in the NetEase Cloud Music app — and the key to poll with; action=poll reports 800 expired / 801 waiting / 802 scanned / 803 confirmed. Poll every 2–3 seconds.",
+      "inputSchema": {
+        "properties": {
+          "action": {
+            "description": "start (default) or poll",
+            "type": "string"
+          },
+          "key": {
+            "description": "for poll: the key action=start returned",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "login_qr"
+    },
+    {
+      "description": "Search one content source's catalog: kind song/album/artist/playlist — netease also has user and podcast. Songs carry playable, so a track that would fail to play is visible before playing begins: kuwo and qq mark VIP songs playable=false, while migu plays most tracks — VIP ones included — at 128k as a guest. offset is page-granular for kuwo, migu and qq: it rounds down to a whole page.",
+      "inputSchema": {
+        "properties": {
+          "kind": {
+            "description": "song (default), album, artist or playlist — netease also has user, podcast",
+            "type": "string"
+          },
+          "limit": {
+            "description": "results per page, default 20",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "results to skip, default 0 (kuwo, migu and qq round down to a whole page)",
+            "type": "integer"
+          },
+          "query": {
+            "description": "what to look for",
+            "type": "string"
+          },
+          "source": {
+            "description": "the content source: netease (default), kuwo, migu, qq or local",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "name": "search_music"
+    },
+    {
+      "description": "Manage the local music index — the only way the local source learns what to play. action=add registers an absolute directory and scans it for mp3/flac files now; remove drops a directory and its tracks; list reports what is registered and how many tracks each still yields; rescan walks everything again to pick up added, moved or deleted files (unchanged files skip the tag re-read). source=local searches only what this has indexed.",
+      "inputSchema": {
+        "properties": {
+          "action": {
+            "description": "add (path required), remove (path required), list or rescan",
+            "type": "string"
+          },
+          "path": {
+            "description": "absolute directory path, for add and remove",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "name": "scan_local"
+    },
+    {
+      "description": "One profile page. netease: artist (with hot songs, or tab=albums), album, user or playlist — the page carries its name, cover and description. The other sources: album or playlist, with their tracks; those pages name the page by id and count only.",
+      "inputSchema": {
+        "properties": {
+          "id": {
+            "description": "the id, a number for netease or its text for the other sources",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "kind": {
+            "description": "artist, album, user or playlist (other sources: album, playlist)",
+            "type": "string"
+          },
+          "limit": {
+            "description": "for tab albums, default 20",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "for tab albums, default 0",
+            "type": "integer"
+          },
+          "source": {
+            "description": "the content source: netease (default), kuwo, migu, qq or local",
+            "type": "string"
+          },
+          "tab": {
+            "description": "albums: an artist's albums, limit and offset apply",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "type": "object"
+      },
+      "name": "get_catalog"
+    },
+    {
+      "description": "A track's lyrics: the timed LRC, their translation where the source has one (netease, qq), and the word-timed lyrics where NetEase and QQ have one. format lrc/translation/yrc/all (default).",
+      "inputSchema": {
+        "properties": {
+          "format": {
+            "description": "lrc, translation, yrc or all (default)",
+            "type": "string"
+          },
+          "id": {
+            "description": "the track id (search_music finds it)",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "source": {
+            "description": "the content source: netease (default), kuwo, migu, qq or local",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "name": "get_lyrics"
+    },
+    {
+      "description": "NetEase only. The comments of a song, podcast episode or playlist: the hot ones, plus a page of the latest.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "comments per page, default 20",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "comments to skip, default 0",
+            "type": "integer"
+          },
+          "playlist_id": {
+            "description": "comments of a playlist",
+            "type": "integer"
+          },
+          "program_id": {
+            "description": "comments of a podcast episode",
+            "type": "integer"
+          },
+          "song_id": {
+            "description": "comments of a song",
+            "type": "integer"
+          },
+          "source": {
+            "description": "the content source: netease (default), kuwo, migu, qq or local",
+            "type": "string"
+          },
+          "thread": {
+            "description": "any other thread, by its NetEase name (R_SO_4_…, A_DJ_1_…, A_PL_0_…)",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_comments"
+    },
+    {
+      "description": "NetEase only. One home-page card per call: kind daily_songs, recommended_playlists (login), featured, charts or recent_plays (login).",
+      "inputSchema": {
+        "properties": {
+          "kind": {
+            "description": "daily_songs, recommended_playlists, featured, charts or recent_plays",
+            "type": "string"
+          },
+          "limit": {
+            "description": "for featured and recent_plays, default 20",
+            "type": "integer"
+          },
+          "source": {
+            "description": "the content source: netease (default), kuwo, migu, qq or local",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "name": "get_discovery"
+    },
+    {
+      "description": "NetEase only. A few tracks the personal FM picks: mode default (the listener's taste), familiar, explore, or heart (心动模式, from a liked song in the liked-songs playlist). Returns tracks only — queue them with play_queue, or pass radio to play_queue to play them.",
+      "inputSchema": {
+        "properties": {
+          "mode": {
+            "description": "default (default), familiar, explore or heart",
+            "type": "string"
+          },
+          "playlist_id": {
+            "description": "for heart: the liked-songs playlist",
+            "type": "integer"
+          },
+          "song_id": {
+            "description": "for heart: the liked song to go from",
+            "type": "integer"
+          },
+          "source": {
+            "description": "the content source: netease (default), kuwo, migu, qq or local",
+            "type": "string"
+          },
+          "start_id": {
+            "description": "for heart: the song the mode began with, or song_id",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_radio"
+    },
+    {
+      "description": "NetEase only. Write: tell the personal FM never to play a track again (trash it). A write with an effect on what the FM later picks.",
+      "inputSchema": {
+        "properties": {
+          "song_id": {
+            "description": "the track to trash",
+            "type": "integer"
+          },
+          "source": {
+            "description": "the content source: netease (default), kuwo, migu, qq or local",
+            "type": "string"
+          }
+        },
+        "required": [
+          "song_id"
+        ],
+        "type": "object"
+      },
+      "name": "fm_feedback"
+    },
+    {
+      "description": "The player snapshot: what plays now with its current lyric line, where it is, the queue and its radio, volume, shuffle, repeat, and the dsp state (eq, night, normalize — how the sound comes out shaped). The position moves on its own between calls — call again for a fresh one.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "player_state"
+    },
+    {
+      "description": "Build a queue and play it: explicit track ids, a whole playlist or album, or — netease only — a radio mode (default/familiar/explore/heart). Exactly one of those, except that heart also takes song_id and playlist_id (the liked-songs playlist). source picks the catalog: netease (default), kuwo, migu or qq. kuwo, migu and qq need no sign-in. Answers with the snapshot; playing needs an audio output on this machine.",
+      "inputSchema": {
+        "properties": {
+          "album_id": {
+            "description": "queue a whole album (every source serves these)",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "playlist_id": {
+            "description": "queue a whole playlist (every source serves these)",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "radio": {
+            "description": "queue a radio: default/familiar/explore/heart (netease only)",
+            "type": "string"
+          },
+          "song_id": {
+            "description": "for radio heart: the liked song to go from",
+            "type": "integer"
+          },
+          "source": {
+            "description": "the content source: netease (default), kuwo, migu, qq or local",
+            "type": "string"
+          },
+          "start": {
+            "description": "which queue entry to start from, 0-based",
+            "type": "integer"
+          },
+          "start_id": {
+            "description": "for radio heart: the song the mode began with, or song_id",
+            "type": "integer"
+          },
+          "tracks": {
+            "description": "track ids to queue, in order (search_music finds them; check playable first)",
+            "items": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "play_queue"
+    },
+    {
+      "description": "Operations on the player, applied in order, all or nothing, answered with the snapshot after the last: toggle, play, pause, next, prev, jump (value: queue index), seek (value: seconds), volume (value: 0-1), preamp (value: gain ahead of the EQ, -12 to 12 dB), shuffle (on), repeat (mode: off/all/one), normalize (on: even out the loudness of tracks), eq (mode: a built-in preset — player_state's dsp.eqKeys lists the keys, flat is off, the values are NetEase Cloud Music's own — or a name saved with save_eq, which shadows built-ins by name, or bands: ten gains of -12 to 12 dB, 31 Hz through 16 kHz), night (on: the compression that keeps quiet parts audible), enhance (low/high, each -12 to 12 dB: the bass shelf under 120 Hz and the treble shelf above 8 kHz, what the op leaves out stays), radio_exit (leave the radio, keep the song).",
+      "inputSchema": {
+        "properties": {
+          "operations": {
+            "description": "e.g. [{\"op\":\"toggle\"},{\"op\":\"volume\",\"value\":0.6},{\"op\":\"eq\",\"mode\":\"vocal\"},{\"op\":\"night\",\"on\":true}]",
+            "items": {
+              "properties": {
+                "bands": {
+                  "description": "for eq without mode: ten gains, -12 to 12 dB, for 31/62/125/250/500 Hz and 1/2/4/8/16 kHz",
+                  "type": "array"
+                },
+                "high": {
+                  "description": "for enhance: the treble shelf, -12 to 12 dB",
+                  "type": "number"
+                },
+                "low": {
+                  "description": "for enhance: the bass shelf, -12 to 12 dB",
+                  "type": "number"
+                },
+                "mode": {
+                  "description": "for repeat: off, all or one; for eq: a preset key or a name saved with save_eq",
+                  "type": "string"
+                },
+                "on": {
+                  "description": "for shuffle, normalize and night: true to turn on, false to turn off",
+                  "type": "boolean"
+                },
+                "op": {
+                  "description": "toggle, play, pause, next, prev, jump, seek, volume, preamp, shuffle, repeat, normalize, eq, night, enhance or radio_exit",
+                  "type": "string"
+                },
+                "value": {
+                  "description": "for jump the queue index, for seek seconds, for volume 0 to 1",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "op"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "name": "player_control"
+    },
+    {
+      "description": "Save one of the listener's own EQ presets: name (saving an existing name replaces it; the name shadows a built-in preset of the same name when applied), ten gains of -12 to 12 dB for 31 Hz through 16 kHz, optional label shown on the snapshot. Presets survive restarts; apply one with player_control eq mode.",
+      "inputSchema": {
+        "properties": {
+          "gains": {
+            "description": "ten gains, -12 to 12 dB, bands in order 31/63/125/250/500/1k/2k/4k/8k/16k",
+            "type": "array"
+          },
+          "label": {
+            "description": "display name, defaults to name",
+            "type": "string"
+          },
+          "name": {
+            "description": "the preset's name; saving an existing one replaces it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "gains"
+        ],
+        "type": "object"
+      },
+      "name": "save_eq"
+    },
+    {
+      "description": "Delete one of the listener's own EQ presets by name. Deleting one that shadowed a built-in preset falls back to the built-in. Does not change what currently plays.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "description": "the user preset's name (player_state's dsp.userEqPresets lists them)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "delete_eq"
+    },
+    {
+      "description": "Not available yet (phase 3). Will compile a scene description (专注写代码, 雨天睡前) into a queue from the local preference profile.",
+      "inputSchema": {
+        "properties": {
+          "scene": {
+            "description": "the scene, in any words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scene"
+        ],
+        "type": "object"
+      },
+      "name": "set_scene"
+    },
+    {
+      "description": "Not available yet (phase 3). Will like or unlike a track and feed the local preference profile.",
+      "inputSchema": {
+        "properties": {
+          "id": {
+            "description": "the track",
+            "type": "integer"
+          },
+          "like": {
+            "description": "true to like, false to unlike (default true)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "name": "like_song"
+    },
+    {
+      "description": "Not available yet (phase 3). Will create/rename/delete (confirm required) playlists, add or remove tracks, as an operations array.",
+      "inputSchema": {
+        "properties": {
+          "operations": {
+            "description": "e.g. [{\"op\":\"create\",\"name\":\"…\"},{\"op\":\"add_tracks\",\"playlist_id\":1,\"track_ids\":[2]}]",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "name": "manage_playlist"
+    },
+    {
+      "description": "Not available yet (phase 3). Will follow artists, subscribe podcasts, like programs — one op each, bool to reverse.",
+      "inputSchema": {
+        "properties": {
+          "operations": {
+            "description": "e.g. [{\"op\":\"follow_artist\",\"id\":1,\"on\":true}]",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "name": "manage_subscription"
+    }
+  ]
+}
